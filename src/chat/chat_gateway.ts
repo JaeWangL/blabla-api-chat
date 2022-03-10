@@ -64,10 +64,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.accumulatedUserCount.set(roomId, updatedUserCount);
 
     // Send his profile to 'client'
-    this.server.to(client.id).emit(SocketPubMessageTypes.GET_PROFILE, updatedUserCount);
+    this.server.to(client.id).emit(SocketPubMessageTypes.GET_PROFILE, updatedUserCount.toString());
 
     // Send joined new member message to others 'except client'
-    client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, updatedUserCount);
+    client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, updatedUserCount.toString());
   }
 
   /**
