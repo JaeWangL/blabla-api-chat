@@ -56,6 +56,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage(SocketSubMessageTypes.JOIN_ROOM)
   async handleJoinRoomAsync(@ConnectedSocket() client: Socket, @MessageBody() data: JoinRoomRequest): Promise<void> {
     const { deviceType, deviceId, roomId } = data;
+
+    const existingKey = this.getClientByDevice(deviceType, deviceId);
+    if (existingKey) {
+      // If user already connected socket,
+      // Previous socket will be disconnected
+      this.joinedUsers.delete(existingKey);
+    }
     // updatedUserCount will be used with user's nickname
     const updatedUserCount = this.accumulatedUserCount.get(roomId) ? this.accumulatedUserCount.get(roomId) + 1 : 1;
 
@@ -77,10 +84,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage(SocketSubMessageTypes.LEAVE_ROOM)
   async onLeaveRoomAsync(@ConnectedSocket() client: Socket, @MessageBody() data: LeaveRoomRequest): Promise<void> {
     const { deviceType, deviceId, nickName, roomId } = data;
-    const updatedUserCount = this.accumulatedUserCount.get(roomId) - 1;
-
     client.leave(roomId);
 
+    // Send leave member message to others 'except client'
     client.to(roomId).emit(SocketPubMessageTypes.LEAVED_EXISTING_MEMBER, nickName);
 
     this.disconnectClient(client);
@@ -93,13 +99,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ): Promise<void> {
     const { message, nickName, roomId } = data;
 
-    client.to(roomId).emit(SocketPubMessageTypes.NEW_MESSAGE, { nickName, message } as SentMessage);
+    // Send new message to all members in roomId 'including sender'
+    this.server.in(roomId).emit(SocketPubMessageTypes.NEW_MESSAGE, { nickName, message } as SentMessage);
   }
 
-  private getClientByDevice(deviceType: 1 | 2, deviceId: string): Socket | undefined {
+  private getClientByDevice(deviceType: 1 | 2, deviceId: string): string | undefined {
     for (const [key, value] of this.joinedUsers.entries()) {
       if (value.deviceType === deviceType && value.deviceId === deviceId) {
-        return this.server.sockets.sockets.get(key);
+        return key;
       }
     }
 
