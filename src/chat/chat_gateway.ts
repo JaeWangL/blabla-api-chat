@@ -24,7 +24,8 @@ type JoinedUser = {
 };
 
 @WebSocketGateway({
-  transports: ['websocket', 'polling', 'flashsocket'],
+  transports: ['websocket'],
+  // transports: ['websocket', 'polling', 'flashsocket'],
   path: '/ws-chat/',
   cors: {
     origin: '*',
