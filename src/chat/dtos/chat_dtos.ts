@@ -36,4 +36,18 @@ export class SentMessage {
   nickName: string;
 
   message: string;
+
+  createdAt: Date;
+}
+
+export class JoinedNewMember {
+  nickName: string;
+
+  joinedAt: Date;
+}
+
+export class LeavedExistingMember {
+  nickName: string;
+
+  leavedAt: Date;
 }
