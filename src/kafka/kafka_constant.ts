@@ -1,0 +1,7 @@
+export const KAFKA_TOPICS_SUBSCRIBE = [];
+
+export const KAFKA_PRODUCER_INSYNC_SERVICE_NAME = 'KAFKA_PRODUCER_INSYNC_SERVICE';
+
+export enum KafkaProducerACKS {
+  INSYNC = 'INSYNC',
+}

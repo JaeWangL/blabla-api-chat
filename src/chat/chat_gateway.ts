@@ -1,4 +1,5 @@
 import { Socket, Server } from 'socket.io';
+import { Inject } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -9,8 +10,12 @@ import {
   OnGatewayDisconnect,
   OnGatewayInit,
 } from '@nestjs/websockets';
+import { KafkaTopics } from '../configs/kafka_topics';
 import { SocketPubMessageTypes, SocketSubMessageTypes } from '../configs/socket_keys';
+import { JoinedRoomIntegrationEvent } from '../infrastructure/events/joined_room_integration_event';
+import { LeavedRoomIntegrationEvent } from '../infrastructure/events/leaved_room_integration_event';
 import { JoinRoomRequest, LeaveRoomRequest, SendMessageRequest, SentMessage } from './dtos/chat_dtos';
+import { KafkaProducerService } from '../kafka/kafka_producer_service';
 
 type JoinedUser = {
   roomId: string;
@@ -37,6 +42,8 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   joinedUsers: Map<string, JoinedUser> = new Map(); // [clientId, JoinedUser]
 
   accumulatedUserCount: Map<string, number> = new Map(); // [roomId, count]
+
+  constructor(private kafkaService: KafkaProducerService) {}
 
   afterInit(server: Server): void {
     // console.log('Init');
@@ -76,6 +83,11 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
     // Send joined new member message to others 'except client'
     client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, updatedUserCount.toString());
+
+    this.kafkaService.send<JoinedRoomIntegrationEvent>(KafkaTopics.JOINED_ROOM_MEMBER, {
+      postId: roomId,
+      updatedMemberCount: updatedUserCount,
+    });
   }
 
   /**
@@ -85,12 +97,14 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   @SubscribeMessage(SocketSubMessageTypes.LEAVE_ROOM)
   async onLeaveRoomAsync(@ConnectedSocket() client: Socket, @MessageBody() data: LeaveRoomRequest): Promise<void> {
     const { deviceType, deviceId, nickName, roomId } = data;
+    const updatedUserCount = this.accumulatedUserCount.get(roomId) ? this.accumulatedUserCount.get(roomId) - 1 : 0;
+
     client.leave(roomId);
 
     // Send leave member message to others 'except client'
     client.to(roomId).emit(SocketPubMessageTypes.LEAVED_EXISTING_MEMBER, nickName);
 
-    this.disconnectClient(client);
+    this.disconnectClient(client, roomId, updatedUserCount);
   }
 
   @SubscribeMessage(SocketSubMessageTypes.SEND_MESSAGE)
@@ -114,8 +128,13 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     return undefined;
   }
 
-  private disconnectClient(client: Socket) {
+  private disconnectClient(client: Socket, roomId: string, updatedUserCount: number) {
     this.joinedUsers.delete(client.id);
+
+    this.kafkaService.send<LeavedRoomIntegrationEvent>(KafkaTopics.LEAVED_ROOM_MEMBER, {
+      postId: roomId,
+      updatedMemberCount: updatedUserCount,
+    });
 
     client.disconnect(true);
   }
