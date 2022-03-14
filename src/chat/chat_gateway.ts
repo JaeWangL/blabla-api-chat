@@ -13,7 +13,14 @@ import { KafkaTopics } from '../configs/kafka_topics';
 import { SocketPubMessageTypes, SocketSubMessageTypes } from '../configs/socket_keys';
 import { JoinedRoomIntegrationEvent } from '../infrastructure/events/joined_room_integration_event';
 import { LeavedRoomIntegrationEvent } from '../infrastructure/events/leaved_room_integration_event';
-import { JoinRoomRequest, LeaveRoomRequest, SendMessageRequest, SentMessage } from './dtos/chat_dtos';
+import {
+  JoinRoomRequest,
+  JoinedNewMember,
+  LeaveRoomRequest,
+  LeavedExistingMember,
+  SendMessageRequest,
+  SentMessage,
+} from './dtos/chat_dtos';
 import { KafkaProducerService } from '../kafka/kafka_producer_service';
 
 type JoinedUser = {
@@ -81,7 +88,10 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.server.to(client.id).emit(SocketPubMessageTypes.GET_PROFILE, updatedUserCount.toString());
 
     // Send joined new member message to others 'except client'
-    client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, updatedUserCount.toString());
+    client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, {
+      nickName: updatedUserCount.toString(),
+      joinedAt: new Date(),
+    } as JoinedNewMember);
 
     this.kafkaService.emit<JoinedRoomIntegrationEvent>(KafkaTopics.JOINED_ROOM_MEMBER, {
       postId: roomId,
@@ -101,7 +111,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     client.leave(roomId);
 
     // Send leave member message to others 'except client'
-    client.to(roomId).emit(SocketPubMessageTypes.LEAVED_EXISTING_MEMBER, nickName);
+    client
+      .to(roomId)
+      .emit(SocketPubMessageTypes.LEAVED_EXISTING_MEMBER, { nickName, leavedAt: new Date() } as LeavedExistingMember);
 
     this.disconnectClient(client, roomId, updatedUserCount);
   }
@@ -114,7 +126,9 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     const { message, nickName, roomId } = data;
 
     // Send new message to all members in roomId 'including sender'
-    this.server.in(roomId).emit(SocketPubMessageTypes.NEW_MESSAGE, { nickName, message } as SentMessage);
+    this.server
+      .in(roomId)
+      .emit(SocketPubMessageTypes.NEW_MESSAGE, { nickName, message, createdAt: new Date() } as SentMessage);
   }
 
   private getClientByDevice(deviceType: 1 | 2, deviceId: string): string | undefined {
