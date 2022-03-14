@@ -1,5 +1,4 @@
 import { Socket, Server } from 'socket.io';
-import { Inject } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -84,7 +83,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     // Send joined new member message to others 'except client'
     client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, updatedUserCount.toString());
 
-    this.kafkaService.send<JoinedRoomIntegrationEvent>(KafkaTopics.JOINED_ROOM_MEMBER, {
+    this.kafkaService.emit<JoinedRoomIntegrationEvent>(KafkaTopics.JOINED_ROOM_MEMBER, {
       postId: roomId,
       updatedMemberCount: updatedUserCount,
     });
@@ -131,7 +130,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   private disconnectClient(client: Socket, roomId: string, updatedUserCount: number) {
     this.joinedUsers.delete(client.id);
 
-    this.kafkaService.send<LeavedRoomIntegrationEvent>(KafkaTopics.LEAVED_ROOM_MEMBER, {
+    this.kafkaService.emit<LeavedRoomIntegrationEvent>(KafkaTopics.LEAVED_ROOM_MEMBER, {
       postId: roomId,
       updatedMemberCount: updatedUserCount,
     });

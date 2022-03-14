@@ -41,7 +41,23 @@ export class KafkaProducerService implements OnApplicationBootstrap, OnModuleDes
     await this.kafkaInsync.close();
   }
 
-  async send<T>(topic: string, data: T, options?: IKafkaProducerOptions): Promise<void> {
+  /**
+   * Send event without subscrbing response
+   */
+  async emit<T>(topic: string, data: T, options?: IKafkaProducerOptions): Promise<void> {
+    const request: IRequestKafka<T> = {
+      key: await this.createId(),
+      value: data,
+      headers: options && options.headers ? options.headers : undefined,
+    };
+
+    this.kafkaInsync.emit(topic, request).pipe(timeout(this.timeout));
+  }
+
+  /**
+   * Send topic with response
+   */
+  async send<T>(topic: string, data: T, options?: IKafkaProducerOptions): Promise<IResponseKafka> {
     const request: IRequestKafka<T> = {
       key: await this.createId(),
       value: data,
@@ -49,9 +65,6 @@ export class KafkaProducerService implements OnApplicationBootstrap, OnModuleDes
     };
 
     const kafka = this.kafkaInsync;
-    kafka.emit<any, IRequestKafka<T>>(topic, request).pipe(timeout(this.timeout));
-
-    /* TODO: Handle subscrbing of send's response
     const firstValue = await firstValueFrom(
       kafka.send<any, IRequestKafka<T>>(topic, request).pipe(timeout(this.timeout)),
     );
@@ -63,7 +76,6 @@ export class KafkaProducerService implements OnApplicationBootstrap, OnModuleDes
       firstValue,
       lastValue,
     };
-    */
   }
 
   private async createId(): Promise<string> {
