@@ -1,0 +1,21 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Rooms {
+  room_id                     String   @id @db.VarChar(255)
+  accumulated_members_count   Int      @default(0)
+}
+
+model Members {
+  client_id    String   @id @db.VarChar(255)
+  room_id      String   @db.VarChar(255)
+  device_type  Int      @db.SmallInt     @default(0)
+  device_id    String   @db.VarChar(255)
+  nick_name    String   @db.VarChar(255)
+}
