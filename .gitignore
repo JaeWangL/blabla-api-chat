@@ -38,3 +38,9 @@ lerna-debug.log*
 package-lock.json
 .yarn
 yarn.lock
+
+# Migrations
+prisma/migrations
+
+# SSL
+**/**.pem

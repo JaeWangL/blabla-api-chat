@@ -3,6 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
+import { DatabaseService } from './database/database_service';
 import { AppModule } from './app_module';
 
 async function bootstrap() {
@@ -31,6 +32,9 @@ async function bootstrap() {
     contentSecurityPolicy: false,
   });
   app.setGlobalPrefix('/api');
+
+  const dbService: DatabaseService = app.get(DatabaseService);
+  dbService.enableShutdownHooks(app);
 
   await app.listen(port, host);
   logger.log(`Server running on ${await app.getUrl()}`, 'NestApplication');
