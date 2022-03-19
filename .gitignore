@@ -44,3 +44,8 @@ prisma/migrations
 
 # SSL
 **/**.pem
+
+# Security
+.env
+Dockerfile
+

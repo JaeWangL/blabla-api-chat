@@ -1,0 +1,37 @@
+FROM node:lts AS builder
+COPY package.json yarn.lock ./
+COPY prisma ./prisma/
+RUN yarn install
+RUN yarn prisma generate
+
+COPY . ./
+RUN yarn build
+
+FROM node:lts
+ENV APP_ENV=production
+ENV APP_HOST=0.0.0.0
+ENV APP_PORT=8080
+ENV APP_LANGUAGE=ko
+ENV APP_TZ=Etc/UTC
+ENV APP_DEBUG=false
+ENV DATABASE_URL=mysql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require&sslcert=filename&connect_timeout=300&pool_timeout=300&socket_timeout=300
+ENV KAFKA_BROKERS=localhost:9092
+ENV KAFKA_CLIENT_ID=chat-api
+ENV KAFKA_CONSUMER_GROUP=chat-api-consumer
+ENV KAFKA_KEY=your_key
+ENV KAFKA_SECRET=your_secret
+
+
+RUN mkdir -p /usr/src/app
+
+WORKDIR /usr/src/app
+
+COPY --from=builder node_modules /usr/src/app/node_modules
+COPY --from=builder package.json /usr/src/app/package.json
+COPY --from=builder dist /usr/src/app/dist
+COPY --from=builder prisma /usr/src/app/prisma
+
+COPY . /usr/src/app
+
+EXPOSE 8080
+CMD [ "yarn", "start" ]
