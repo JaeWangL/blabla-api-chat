@@ -4,6 +4,7 @@ export enum SocketSubMessageTypes {
 }
 
 export enum SocketPubMessageTypes {
+  RATE_LIMITED = 'rateLimited',
   GET_PROFILE = 'getProfile',
   JOINED_NEW_MEMBER = 'joinedNewMember',
   LEAVED_EXISTING_MEMBER = 'leavedExistingMember',
