@@ -28,7 +28,7 @@ import { RoomService } from './services/room_service';
 
 const rateLimiter = new RateLimiterMemory({
   points: 10, // 10 points
-  duration: 1, // per second
+  duration: 3, // per second
 });
 
 @WebSocketGateway({
