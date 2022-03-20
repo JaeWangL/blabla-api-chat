@@ -1,3 +1,4 @@
+import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { Socket, Server } from 'socket.io';
 import {
   ConnectedSocket,
@@ -20,9 +21,15 @@ import {
   SendMessageRequest,
   SentMessage,
 } from './dtos/chat_dtos';
+import { RateLimited } from './dtos/socket_dtos';
 import { KafkaProducerService } from '../kafka/kafka_producer_service';
 import { MemberService } from './services/member_service';
 import { RoomService } from './services/room_service';
+
+const rateLimiter = new RateLimiterMemory({
+  points: 10, // 10 points
+  duration: 1, // per second
+});
 
 @WebSocketGateway({
   transports: ['websocket'],
@@ -61,32 +68,40 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async handleJoinRoomAsync(@ConnectedSocket() client: Socket, @MessageBody() data: JoinRoomRequest): Promise<void> {
     const { deviceType, deviceId, roomId } = data;
 
-    const room = await this.roomService.upsertByRoomIdAsync(roomId);
-    const generatedNickname = room.accumulated_members_count.toString();
+    try {
+      await rateLimiter.consume(client.handshake.address); // consume 1 point per event from IP
 
-    // Join in specific room
-    client.join(roomId);
-    await this.memberService.upsertByClientIdAsync(client.id, {
-      client_id: client.id,
-      room_id: roomId,
-      device_type: deviceType,
-      device_id: deviceId,
-      nick_name: generatedNickname,
-    });
+      const room = await this.roomService.upsertByRoomIdAsync(roomId);
+      const generatedNickname = room.accumulated_members_count.toString();
 
-    // Send his profile to 'client'
-    this.server.to(client.id).emit(SocketPubMessageTypes.GET_PROFILE, generatedNickname);
+      // Join in specific room
+      client.join(roomId);
+      await this.memberService.upsertByClientIdAsync(client.id, {
+        client_id: client.id,
+        room_id: roomId,
+        device_type: deviceType,
+        device_id: deviceId,
+        nick_name: generatedNickname,
+      });
 
-    // Send joined new member message to others 'except client'
-    client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, {
-      nickName: generatedNickname,
-      joinedAt: new Date(),
-    } as JoinedNewMember);
+      // Send his profile to 'client'
+      this.server.to(client.id).emit(SocketPubMessageTypes.GET_PROFILE, generatedNickname);
 
-    this.kafkaService.emit<JoinedRoomIntegrationEvent>(KafkaTopics.JOINED_ROOM_MEMBER, {
-      postId: roomId,
-      updatedMemberCount: room.accumulated_members_count,
-    });
+      // Send joined new member message to others 'except client'
+      client.to(roomId).emit(SocketPubMessageTypes.JOINED_NEW_MEMBER, {
+        nickName: generatedNickname,
+        joinedAt: new Date(),
+      } as JoinedNewMember);
+
+      this.kafkaService.emit<JoinedRoomIntegrationEvent>(KafkaTopics.JOINED_ROOM_MEMBER, {
+        postId: roomId,
+        updatedMemberCount: room.accumulated_members_count,
+      });
+    } catch (rejRes) {
+      this.server
+        .to(client.id)
+        .emit(SocketPubMessageTypes.RATE_LIMITED, { retryRemainingMs: rejRes.msBeforeNext } as RateLimited);
+    }
   }
 
   @SubscribeMessage(SocketSubMessageTypes.SEND_MESSAGE)
@@ -96,10 +111,18 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   ): Promise<void> {
     const { message, nickName, roomId } = data;
 
-    // Send new message to all members in roomId 'including sender'
-    this.server
-      .in(roomId)
-      .emit(SocketPubMessageTypes.NEW_MESSAGE, { nickName, message, createdAt: new Date() } as SentMessage);
+    try {
+      await rateLimiter.consume(client.handshake.address); // consume 1 point per event from IP
+
+      // Send new message to all members in roomId 'including sender'
+      this.server
+        .in(roomId)
+        .emit(SocketPubMessageTypes.NEW_MESSAGE, { nickName, message, createdAt: new Date() } as SentMessage);
+    } catch (rejRes) {
+      this.server
+        .to(client.id)
+        .emit(SocketPubMessageTypes.RATE_LIMITED, { retryRemainingMs: rejRes.msBeforeNext } as RateLimited);
+    }
   }
 
   /**

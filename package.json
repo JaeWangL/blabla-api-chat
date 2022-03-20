@@ -46,6 +46,7 @@
     "ksuid": "^3.0.0",
     "nest-winston": "^1.6.2",
     "nestjs-prisma": "^0.15.1",
+    "rate-limiter-flexible": "^2.3.6",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "rxjs": "^7.5.4",
